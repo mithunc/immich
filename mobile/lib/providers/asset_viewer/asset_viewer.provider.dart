@@ -5,8 +5,10 @@ import 'package:flutter/foundation.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
+import 'package:immich_mobile/providers/asset_viewer/is_motion_video_playing.provider.dart';
 import 'package:immich_mobile/providers/asset_viewer/video_player_provider.dart';
 import 'package:immich_mobile/providers/infrastructure/asset.provider.dart';
+import 'package:immich_mobile/providers/infrastructure/settings.provider.dart';
 
 part 'asset_viewer.provider.freezed.dart';
 
@@ -53,6 +55,14 @@ class AssetViewerStateNotifier extends Notifier<AssetViewerState> {
       showingOcr: false,
     );
     _watchCurrentAsset(asset);
+    _syncMotionPhotoPlayback(asset);
+  }
+
+  /// Reveals the video half of a motion photo straight away when auto play is
+  /// enabled, and clears the flag otherwise so playback never leaks across assets.
+  void _syncMotionPhotoPlayback(BaseAsset asset) {
+    final autoPlay = ref.read(appConfigProvider).viewer.autoPlayMotionPhoto;
+    ref.read(isPlayingMotionVideoProvider.notifier).playing = autoPlay && asset.isMotionPhoto;
   }
 
   void _watchCurrentAsset(BaseAsset asset) {
