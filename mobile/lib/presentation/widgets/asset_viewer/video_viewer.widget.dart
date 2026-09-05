@@ -49,6 +49,7 @@ class NativeVideoViewerState extends ConsumerState<NativeVideoViewer> with Widge
   Timer? _loadTimer;
   bool _isVideoReady = false;
   bool _shouldPlayOnForeground = true;
+  bool _isLooping = false;
 
   VideoPlayerNotifier get _notifier => ref.read(videoPlayerProvider(widget.asset.id).notifier);
 
@@ -247,7 +248,9 @@ class NativeVideoViewerState extends ConsumerState<NativeVideoViewer> with Widge
 
     _notifier.onNativePlaybackEnded();
 
-    if (_controller?.playbackInfo?.status == PlaybackStatus.stopped) {
+    // A looping motion photo must not be torn back down to its still image, even
+    // if the native player still reports the clip as stopped.
+    if (!_isLooping && _controller?.playbackInfo?.status == PlaybackStatus.stopped) {
       ref.read(isPlayingMotionVideoProvider.notifier).playing = false;
     }
   }
@@ -285,11 +288,13 @@ class NativeVideoViewerState extends ConsumerState<NativeVideoViewer> with Widge
     }
 
     // Grab refs to prevent reading after dispose
-    final loopVideo = widget.loopOverride ?? ref.read(appConfigProvider).viewer.loopVideo;
+    final viewer = ref.read(appConfigProvider).viewer;
+    final loop = widget.loopOverride ?? (widget.asset.isMotionPhoto ? viewer.loopMotionPhoto : viewer.loopVideo);
     final localNotifier = _notifier;
+    _isLooping = loop;
 
     await localNotifier.load(source);
-    await localNotifier.setLoop(!widget.asset.isMotionPhoto && loopVideo);
+    await localNotifier.setLoop(loop);
     await localNotifier.setVolume(1);
   }
 
