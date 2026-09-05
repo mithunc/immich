@@ -4,8 +4,10 @@ import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
+import 'package:immich_mobile/domain/models/config/app_config.dart';
 import 'package:immich_mobile/providers/asset_viewer/asset_viewer.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/asset.provider.dart';
+import 'package:immich_mobile/providers/infrastructure/settings.provider.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../../service.mocks.dart';
@@ -21,7 +23,12 @@ void main() {
     assetService = MockAssetService();
     when(() => assetService.watchAsset(any())).thenAnswer((_) => const Stream.empty());
 
-    container = ProviderContainer(overrides: [assetServiceProvider.overrideWithValue(assetService)]);
+    container = ProviderContainer(
+      overrides: [
+        appConfigProvider.overrideWithValue(const AppConfig()),
+        assetServiceProvider.overrideWithValue(assetService),
+      ],
+    );
     addTearDown(container.dispose);
   });
 

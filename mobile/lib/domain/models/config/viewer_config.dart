@@ -9,6 +9,8 @@ abstract class ViewerConfig with _$ViewerConfig {
     @Default(true) bool loopVideo,
     @Default(false) bool loadOriginalVideo,
     @Default(true) bool autoPlayVideo,
+    @Default(true) bool autoPlayMotionPhoto,
+    @Default(true) bool loopMotionPhoto,
     @Default(false) bool tapToNavigate,
   }) = _ViewerConfig;
 }
