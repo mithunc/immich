@@ -58,8 +58,9 @@ class AssetViewerStateNotifier extends Notifier<AssetViewerState> {
     _syncMotionPhotoPlayback(asset);
   }
 
-  /// Reveals the video half of a motion photo straight away when auto play is
-  /// enabled, and clears the flag otherwise so playback never leaks across assets.
+  /// Seeds the video half of a motion photo as playing when it opens if the
+  /// sticky play-button state is on, and clears the flag otherwise so
+  /// playback never leaks across assets.
   void _syncMotionPhotoPlayback(BaseAsset asset) {
     final autoPlay = ref.read(appConfigProvider).viewer.autoPlayMotionPhoto;
     ref.read(isPlayingMotionVideoProvider.notifier).playing = autoPlay && asset.isMotionPhoto;
