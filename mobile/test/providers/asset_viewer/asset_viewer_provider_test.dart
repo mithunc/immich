@@ -5,7 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
 import 'package:immich_mobile/domain/models/config/app_config.dart';
+import 'package:immich_mobile/domain/models/config/viewer_config.dart';
 import 'package:immich_mobile/providers/asset_viewer/asset_viewer.provider.dart';
+import 'package:immich_mobile/providers/asset_viewer/is_motion_video_playing.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/asset.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/settings.provider.dart';
 import 'package:mocktail/mocktail.dart';
@@ -129,6 +131,61 @@ void main() {
 
       notifier.reset();
       expect(container.read(assetViewerProvider).thumbnailSize, isNull);
+    });
+  });
+
+  group('AssetViewerStateNotifier motion photo playback sync', () {
+    ProviderContainer buildContainer({required bool autoPlayMotionPhoto}) {
+      final c = ProviderContainer(
+        overrides: [
+          appConfigProvider.overrideWithValue(
+            AppConfig(viewer: ViewerConfig(autoPlayMotionPhoto: autoPlayMotionPhoto)),
+          ),
+          assetServiceProvider.overrideWithValue(assetService),
+        ],
+      );
+      addTearDown(c.dispose);
+      return c;
+    }
+
+    test('seeds isPlayingMotionVideoProvider true for a motion photo when the sticky flag is on', () {
+      final c = buildContainer(autoPlayMotionPhoto: true);
+      final motionPhoto = RemoteAssetFactory.create(livePhotoVideoId: 'motion-video-1');
+
+      c.read(assetViewerProvider.notifier).setAsset(motionPhoto);
+
+      expect(c.read(isPlayingMotionVideoProvider), isTrue);
+    });
+
+    test('leaves isPlayingMotionVideoProvider false for a motion photo when the sticky flag is off', () {
+      final c = buildContainer(autoPlayMotionPhoto: false);
+      final motionPhoto = RemoteAssetFactory.create(livePhotoVideoId: 'motion-video-2');
+
+      c.read(assetViewerProvider.notifier).setAsset(motionPhoto);
+
+      expect(c.read(isPlayingMotionVideoProvider), isFalse);
+    });
+
+    test('leaves isPlayingMotionVideoProvider false for a non-motion asset even when the sticky flag is on', () {
+      final c = buildContainer(autoPlayMotionPhoto: true);
+      final plainImage = RemoteAssetFactory.create();
+
+      c.read(assetViewerProvider.notifier).setAsset(plainImage);
+
+      expect(c.read(isPlayingMotionVideoProvider), isFalse);
+    });
+
+    test('clears isPlayingMotionVideoProvider when swiping from a motion photo to a plain asset', () {
+      final c = buildContainer(autoPlayMotionPhoto: true);
+      final notifier = c.read(assetViewerProvider.notifier);
+      final motionPhoto = RemoteAssetFactory.create(livePhotoVideoId: 'motion-video-3');
+      final plainImage = RemoteAssetFactory.create();
+
+      notifier.setAsset(motionPhoto);
+      expect(c.read(isPlayingMotionVideoProvider), isTrue);
+
+      notifier.setAsset(plainImage);
+      expect(c.read(isPlayingMotionVideoProvider), isFalse);
     });
   });
 }

@@ -289,7 +289,7 @@ class NativeVideoViewerState extends ConsumerState<NativeVideoViewer> with Widge
 
     // Grab refs to prevent reading after dispose
     final viewer = ref.read(appConfigProvider).viewer;
-    final loop = widget.loopOverride ?? (widget.asset.isMotionPhoto ? viewer.loopMotionPhoto : viewer.loopVideo);
+    final loop = widget.loopOverride ?? (widget.asset.isMotionPhoto ? true : viewer.loopVideo);
     final localNotifier = _notifier;
     _isLooping = loop;
 
