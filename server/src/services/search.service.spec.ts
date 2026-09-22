@@ -375,5 +375,42 @@ describe(SearchService.name, () => {
         expect.objectContaining({ language: 'de' }),
       );
     });
+
+    it('should pass the configured clip distance cutoff to the repository', async () => {
+      mocks.systemMetadata.get.mockResolvedValue({
+        machineLearning: { clip: { maxDistance: 0.78 } },
+      });
+
+      await sut.searchSmart(authStub.user1, { size: 100, query: 'test' });
+
+      expect(mocks.search.searchSmart).toHaveBeenCalledWith(
+        { page: 1, size: 100 },
+        expect.objectContaining({ maxDistance: 0.78 }),
+      );
+    });
+
+    it('should not apply a cutoff when the configured clip distance is 0', async () => {
+      await sut.searchSmart(authStub.user1, { size: 100, query: 'test' });
+
+      expect(mocks.search.searchSmart).toHaveBeenCalledWith(
+        { page: 1, size: 100 },
+        expect.not.objectContaining({ maxDistance: expect.anything() }),
+      );
+    });
+
+    it('should pass the configured clip distance cutoff to the V3 repository', async () => {
+      mocks.systemMetadata.get.mockResolvedValue({
+        machineLearning: { clip: { maxDistance: 0.78 } },
+      });
+      mocks.search.searchSmartV3.mockResolvedValue({ hasNextPage: false, items: [] });
+
+      await sut.searchSmart(authStub.user1, { size: 100, query: 'test', filter: {} });
+
+      expect(mocks.search.searchSmartV3).toHaveBeenCalledWith(
+        { take: 100 },
+        expect.objectContaining({ maxDistance: 0.78 }),
+        expect.anything(),
+      );
+    });
   });
 });
