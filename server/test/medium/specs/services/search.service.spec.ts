@@ -464,5 +464,48 @@ describe(SearchService.name, () => {
       expect(secondPage.items.length).toBe(1);
       expect(secondPage.hasNextPage).toBe(false);
     });
+
+    it('should only return smart search matches within the distance cutoff, newest first', async () => {
+      const { ctx } = setup();
+      const { user } = await ctx.newUser();
+      const searchRepository = ctx.get(SearchRepository);
+
+      // cosine distance from the query e0: exact match 0, halfway between e0 and e1 ~0.29, orthogonal 1
+      const halfway = JSON.stringify(Array.from({ length: 512 }, (_, i) => (i === 0 || i === 1 ? Math.SQRT1_2 : 0)));
+      const oldMatch = await ctx.newAsset({ ownerId: user.id, fileCreatedAt: new Date('2020-01-01') });
+      await searchRepository.upsert(oldMatch.asset.id, unitVector(0));
+      const newMatch = await ctx.newAsset({ ownerId: user.id, fileCreatedAt: new Date('2024-01-01') });
+      await searchRepository.upsert(newMatch.asset.id, halfway);
+      const nonMatch = await ctx.newAsset({ ownerId: user.id, fileCreatedAt: new Date('2025-01-01') });
+      await searchRepository.upsert(nonMatch.asset.id, unitVector(1));
+
+      const scope = { userIds: [user.id], lockedOwnerId: user.id };
+      const { items, hasNextPage } = await searchRepository.searchSmartV3(
+        { take: 10 },
+        { filter: {}, embedding: unitVector(0), maxDistance: 0.5 },
+        scope,
+      );
+
+      expect(items.map(({ id }) => id)).toEqual([newMatch.asset.id, oldMatch.asset.id]);
+      expect(hasNextPage).toBe(false);
+    });
+
+    it('should apply the distance cutoff to the legacy smart search as well', async () => {
+      const { ctx } = setup();
+      const { user } = await ctx.newUser();
+      const searchRepository = ctx.get(SearchRepository);
+
+      const match = await ctx.newAsset({ ownerId: user.id });
+      await searchRepository.upsert(match.asset.id, unitVector(0));
+      const nonMatch = await ctx.newAsset({ ownerId: user.id });
+      await searchRepository.upsert(nonMatch.asset.id, unitVector(1));
+
+      const { items } = await searchRepository.searchSmart(
+        { page: 1, size: 10 },
+        { userIds: [user.id], embedding: unitVector(0), maxDistance: 0.5 },
+      );
+
+      expect(items.map(({ id }) => id)).toEqual([match.asset.id]);
+    });
   });
 });

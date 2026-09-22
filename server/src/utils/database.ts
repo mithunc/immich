@@ -1066,6 +1066,10 @@ export const searchSmartV3Examples: GenerateSqlQueries[] = [
     name: 'cursor-offset',
     params: [{ take: 100, skip: 100 }, { embedding: DummyValue.VECTOR }, scopeExample],
   },
+  {
+    name: 'with-distance-cutoff',
+    params: [{ take: 100 }, { embedding: DummyValue.VECTOR, maxDistance: 0.78 }, scopeExample],
+  },
 ];
 
 export const searchStatisticsV3Examples: GenerateSqlQueries[] = [

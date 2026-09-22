@@ -215,7 +215,14 @@ const AdminConfigSchemaWithVisibility = z
             interval: z.int(),
           })
           .meta({ id: 'AdminConfigMachineLearningAvailabilityChecksDto' }),
-        clip: AdminConfigMachineLearningModelSchema.meta({ id: 'AdminConfigClipDto' }),
+        clip: AdminConfigMachineLearningModelSchema.extend({
+          maxDistance: z
+            .number()
+            .min(0)
+            .max(2)
+            .describe('Maximum embedding distance for a smart search match; 0 disables the cutoff')
+            .meta({ format: 'double' }),
+        }).meta({ id: 'AdminConfigClipDto' }),
         duplicateDetection: AdminConfigMachineLearningTaskSchema.extend({
           maxDistance: z
             .number()
@@ -627,6 +634,7 @@ export const defaults = Object.freeze<SystemConfig>({
     clip: {
       enabled: true,
       modelName: 'ViT-B-32__openai',
+      maxDistance: 0,
     },
     duplicateDetection: {
       enabled: true,

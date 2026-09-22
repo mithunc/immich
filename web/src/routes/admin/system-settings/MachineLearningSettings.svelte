@@ -142,6 +142,18 @@
               </p>
             {/snippet}
           </SettingInputField>
+
+          <SettingInputField
+            inputType={SettingInputFieldType.NUMBER}
+            label={$t('admin.machine_learning_smart_search_max_distance')}
+            bind:value={configToEdit.machineLearning.clip.maxDistance}
+            step="0.005"
+            min={0}
+            max={2}
+            description={$t('admin.machine_learning_smart_search_max_distance_description')}
+            disabled={disabled || !configToEdit.machineLearning.enabled || !configToEdit.machineLearning.clip.enabled}
+            isEdited={configToEdit.machineLearning.clip.maxDistance !== config.machineLearning.clip.maxDistance}
+          />
         </div>
       </SettingAccordion>
 

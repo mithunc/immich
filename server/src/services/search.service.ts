@@ -31,6 +31,10 @@ import { isSmartSearchEnabled } from 'src/utils/misc.js';
 import { decodeSearchCursor, encodeSearchCursor } from 'src/utils/search-cursor.js';
 import { applyLockedVisibilityPolicy, collectFilterIds } from 'src/utils/search-filter.js';
 
+// 0 keeps upstream behaviour: every asset is a candidate, ranked purely by distance
+const clipDistanceCutoff = ({ clip }: SystemConfig['machineLearning']) =>
+  clip.maxDistance > 0 ? { maxDistance: clip.maxDistance } : {};
+
 @Injectable()
 export class SearchService extends BaseService {
   private embeddingCache = new LRUMap<string, string>(100);
@@ -190,6 +194,7 @@ export class SearchService extends BaseService {
         userIds: await userIds,
         viewingUserId: auth.user.id,
         embedding,
+        ...clipDistanceCutoff(machineLearning),
         visibility: dto.visibility ?? (auth.session?.hasElevatedPermission ? undefined : 'not-locked'),
       },
     );
@@ -292,7 +297,7 @@ export class SearchService extends BaseService {
     // no cursor until a rank-aware pagination strategy for smart search is decided
     const { items } = await this.searchRepository.searchSmartV3(
       { take: dto.size },
-      { filter, withExif: dto.withExif, embedding },
+      { filter, withExif: dto.withExif, embedding, ...clipDistanceCutoff(machineLearning) },
       scope,
     );
 

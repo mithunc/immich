@@ -200,6 +200,8 @@
     "machine_learning_smart_search_description": "Search for images semantically using CLIP embeddings",
     "machine_learning_smart_search_enabled": "Enable smart search",
     "machine_learning_smart_search_enabled_description": "If disabled, images will not be encoded for smart search.",
+    "machine_learning_smart_search_max_distance": "Maximum match distance",
+    "machine_learning_smart_search_max_distance_description": "Only return assets within this embedding distance of the query, newest first, instead of ranking the whole library by similarity. Higher values return more results but include weaker matches; the useful range depends on the CLIP model. 0 disables the cutoff.",
     "machine_learning_url_description": "The URL of the machine learning server. If more than one URL is provided, each server will be attempted one-at-a-time until one responds successfully, in order from first to last. Servers that don't respond will be temporarily ignored until they come back online.",
     "maintenance_backup_management": "Backup management",
     "maintenance_delete_backup": "Delete Backup",

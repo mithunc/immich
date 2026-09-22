@@ -208,6 +208,8 @@ export type AdminConfigMachineLearningAvailabilityChecksDto = {
 export type AdminConfigClipDto = {
     /** Whether the task is enabled */
     enabled: boolean;
+    /** Maximum embedding distance for a smart search match; 0 disables the cutoff */
+    maxDistance: number;
     /** Name of the model to use */
     modelName: string;
 };
