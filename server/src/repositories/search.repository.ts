@@ -93,6 +93,8 @@ export interface SearchExifOptions {
 export interface SearchEmbeddingOptions {
   embedding: string;
   userIds: string[];
+  /** when set, only assets within this cosine distance match and results are ordered newest first */
+  maxDistance?: number;
 }
 
 export interface SearchOcrOptions {
@@ -207,6 +209,20 @@ export interface GetCameraLensModelsOptions {
   make?: string;
   model?: string;
 }
+
+// A distance cutoff turns smart search from a ranking into a filter, so its matches are shown
+// newest first like every other search instead of by distance. Without one every asset is a
+// candidate and the order is the only relevance signal, so it has to stay distance-ranked.
+const selectSmartSearch = (
+  qb: ReturnType<typeof searchAssetBuilder>,
+  { embedding, maxDistance }: Pick<SearchEmbeddingOptions, 'embedding' | 'maxDistance'>,
+) => {
+  const distance = sql<number>`smart_search.embedding <=> ${embedding}`;
+  const joined = qb.select(columns.searchAsset).innerJoin('smart_search', 'asset.id', 'smart_search.assetId');
+  return maxDistance === undefined
+    ? joined.orderBy(distance).orderBy('asset.id', 'asc')
+    : joined.where(distance, '<=', maxDistance).orderBy('asset.fileCreatedAt', 'desc').orderBy('asset.id', 'desc');
+};
 
 @Injectable()
 export class SearchRepository {
@@ -324,11 +340,7 @@ export class SearchRepository {
 
     return this.db.transaction().execute(async (trx) => {
       await sql`set local vchordrq.probes = ${sql.lit(probes[VectorIndex.Clip])}`.execute(trx);
-      const items = await searchAssetBuilderLegacy(trx, options)
-        .select(columns.searchAsset)
-        .innerJoin('smart_search', 'asset.id', 'smart_search.assetId')
-        .orderBy(sql`smart_search.embedding <=> ${options.embedding}`)
-        .orderBy('asset.id', 'asc')
+      const items = await selectSmartSearch(searchAssetBuilderLegacy(trx, options), options)
         .limit(pagination.size + 1)
         .offset((pagination.page - 1) * pagination.size)
         .execute();
@@ -568,16 +580,12 @@ export class SearchRepository {
   @GenerateSql(...searchSmartV3Examples)
   searchSmartV3(
     pagination: PaginationOptions,
-    options: Omit<AssetSearchBuilderV3Options, 'order'> & { embedding: string },
+    options: Omit<AssetSearchBuilderV3Options, 'order'> & Pick<SearchEmbeddingOptions, 'embedding' | 'maxDistance'>,
     scope: AssetSearchScope,
   ) {
     return this.db.transaction().execute(async (trx) => {
       await sql`set local vchordrq.probes = ${sql.lit(probes[VectorIndex.Clip])}`.execute(trx);
-      const items = await searchAssetBuilder(trx, options, scope)
-        .select(columns.searchAsset)
-        .innerJoin('smart_search', 'asset.id', 'smart_search.assetId')
-        .orderBy(sql`smart_search.embedding <=> ${options.embedding}`)
-        .orderBy('asset.id', 'asc')
+      const items = await selectSmartSearch(searchAssetBuilder(trx, options, scope), options)
         .limit(pagination.take + 1)
         .offset(pagination.skip ?? 0)
         .execute();
