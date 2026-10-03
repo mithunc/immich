@@ -5,6 +5,7 @@ import 'package:immich_mobile/domain/services/timeline.service.dart';
 import 'package:immich_mobile/presentation/widgets/images/thumbnail.widget.dart';
 import 'package:immich_mobile/providers/asset_viewer/asset_viewer.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
+import 'package:immich_mobile/utils/raw_file.dart';
 
 class AssetStackRow extends ConsumerWidget {
   final List<RemoteAsset> stack;
@@ -76,12 +77,19 @@ class _StackItemState extends ConsumerState<_StackItem> {
 
   @override
   Widget build(BuildContext context) {
+    const shadows = [Shadow(blurRadius: 5.0, color: Color.fromRGBO(0, 0, 0, 0.6), offset: Offset.zero)];
     const playIcon = Center(
-      child: Icon(
-        Icons.play_circle_outline_rounded,
-        color: Colors.white,
-        size: 16,
-        shadows: [Shadow(blurRadius: 5.0, color: Color.fromRGBO(0, 0, 0, 0.6), offset: Offset.zero)],
+      child: Icon(Icons.play_circle_outline_rounded, color: Colors.white, size: 16, shadows: shadows),
+    );
+    // a RAW and the JPEG developed from it have identical thumbnails
+    const rawLabel = Align(
+      alignment: Alignment.bottomCenter,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: 2),
+        child: Text(
+          'RAW',
+          style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700, shadows: shadows),
+        ),
       ),
     );
     const selectedDecoration = BoxDecoration(
@@ -96,6 +104,8 @@ class _StackItemState extends ConsumerState<_StackItem> {
     Widget thumbnail = Thumbnail.fromAsset(asset: widget.asset, size: const Size(60, 40));
     if (widget.asset.isVideo) {
       thumbnail = Stack(children: [thumbnail, playIcon]);
+    } else if (isRawFileName(widget.asset.name)) {
+      thumbnail = Stack(children: [thumbnail, rawLabel]);
     }
     thumbnail = ClipRRect(borderRadius: const BorderRadius.all(Radius.circular(10)), child: thumbnail);
     final isSelected = ref.watch(assetViewerProvider.select((s) => s.stackIndex == widget.index));
