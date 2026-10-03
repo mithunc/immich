@@ -340,6 +340,22 @@ where
 limit
   $3
 
+-- AssetRepository.findRawPairCandidates
+select
+  "asset"."id",
+  "asset"."originalFileName",
+  "asset"."fileCreatedAt",
+  "asset"."stackId"
+from
+  "asset"
+where
+  "ownerId" = $1::uuid
+  and "libraryId" is null
+  and "type" = $2
+  and "deletedAt" is null
+  and "fileCreatedAt" >= $3
+  and "fileCreatedAt" <= $4
+
 -- AssetRepository.getCalendarHeatmap
 select
   date_trunc('DAY', "asset"."createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' as "date",
