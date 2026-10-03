@@ -9,6 +9,7 @@ import { ConfigRepository } from 'src/repositories/config.repository.js';
 import { EventRepository } from 'src/repositories/event.repository.js';
 import { LoggingRepository } from 'src/repositories/logging.repository.js';
 import { MetadataRepository } from 'src/repositories/metadata.repository.js';
+import { StackRepository } from 'src/repositories/stack.repository.js';
 import { StorageRepository } from 'src/repositories/storage.repository.js';
 import { SystemMetadataRepository } from 'src/repositories/system-metadata.repository.js';
 import { TagRepository } from 'src/repositories/tag.repository.js';
@@ -38,6 +39,7 @@ const setup = (db?: Kysely<DB>, { realStorage = false } = {}) => {
       AssetJobRepository,
       ConfigRepository,
       MetadataRepository,
+      StackRepository,
       SystemMetadataRepository,
       TagRepository,
       ...(realStorage ? [StorageRepository] : []),
@@ -233,6 +235,48 @@ describe(MetadataService.name, () => {
           .where('assetId', '=', asset.id)
           .executeTakeFirstOrThrow(),
       ).resolves.toEqual({ orientation: '6' });
+    });
+
+    it('should stack a JPEG with its RAW, with the JPEG on top', async () => {
+      const { sut, ctx } = setup();
+      ctx.getMock(EventRepository).emit.mockResolvedValue();
+      const { filePath } = await createTestFile({ DateTimeOriginal: '2026:10:03 14:32:00.200-07:00' });
+      const { user } = await ctx.newUser();
+      const { asset: raw } = await ctx.newAsset({
+        ownerId: user.id,
+        originalFileName: 'PXL_20261003_213200200.RAW-02.ORIGINAL.dng',
+        fileCreatedAt: new Date('2026-10-03T21:31:59.989Z'),
+      });
+      const { asset: unrelated } = await ctx.newAsset({
+        ownerId: user.id,
+        originalFileName: 'PXL_20261003_213206951.RAW-02.ORIGINAL.dng',
+        fileCreatedAt: new Date('2026-10-03T21:32:06.951Z'),
+      });
+      const { asset: jpeg } = await ctx.newAsset({
+        ownerId: user.id,
+        originalPath: filePath,
+        originalFileName: 'PXL_20261003_213200200.RAW-01.COVER.jpg',
+      });
+      await ctx.newExif({ assetId: jpeg.id, description: '' });
+
+      await sut.handleMetadataExtraction({ id: jpeg.id });
+      // running extraction again (e.g. Extract Metadata → All) must not create another stack
+      await sut.handleMetadataExtraction({ id: jpeg.id });
+
+      const stacks = await ctx.database.selectFrom('stack').selectAll().where('ownerId', '=', user.id).execute();
+      expect(stacks).toEqual([expect.objectContaining({ primaryAssetId: jpeg.id })]);
+      const assets = await ctx.database
+        .selectFrom('asset')
+        .select(['id', 'stackId'])
+        .where('id', 'in', [jpeg.id, raw.id, unrelated.id])
+        .execute();
+      expect(assets).toEqual(
+        expect.arrayContaining([
+          { id: jpeg.id, stackId: stacks[0].id },
+          { id: raw.id, stackId: stacks[0].id },
+          { id: unrelated.id, stackId: null },
+        ]),
+      );
     });
   });
 

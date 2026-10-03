@@ -1749,6 +1749,112 @@ describe(MetadataService.name, () => {
       });
     });
 
+    describe('RAW pairs', () => {
+      const takenAt = new Date('2026-10-03T21:32:00.200Z');
+      const jpegName = 'PXL_20261003_213200200.RAW-01.COVER.jpg';
+      const rawName = 'PXL_20261003_213200200.RAW-02.ORIGINAL.dng';
+
+      const extract = async (
+        asset: ReturnType<typeof AssetFactory.create>,
+        others: Array<{ id: string; originalFileName: string; fileCreatedAt: Date; stackId: string | null }>,
+      ) => {
+        mocks.assetJob.getForMetadataExtraction.mockResolvedValue(getForMetadataExtraction(asset));
+        mocks.asset.findRawPairCandidates.mockResolvedValue([
+          { id: asset.id, originalFileName: asset.originalFileName, fileCreatedAt: takenAt, stackId: asset.stackId },
+          ...others,
+        ]);
+        mocks.stack.create.mockResolvedValue({ id: 'stack-id' } as never);
+        mockReadTags({ DateTimeOriginal: ExifDateTime.fromISO('2026-10-03T14:32:00.200-07:00') });
+
+        await sut.handleMetadataExtraction({ id: asset.id });
+      };
+
+      it('should search a minute either side of the capture time', async () => {
+        const asset = AssetFactory.create({ originalFileName: jpegName });
+
+        await extract(asset, []);
+
+        expect(mocks.asset.findRawPairCandidates).toHaveBeenCalledWith({
+          ownerId: asset.ownerId,
+          libraryId: null,
+          from: new Date('2026-10-03T21:31:00.200Z'),
+          to: new Date('2026-10-03T21:33:00.200Z'),
+        });
+        expect(mocks.stack.create).not.toHaveBeenCalled();
+      });
+
+      it('should stack a JPEG with its RAW, with the JPEG on top', async () => {
+        const asset = AssetFactory.create({ originalFileName: jpegName });
+        const raw = AssetFactory.create({ originalFileName: rawName });
+
+        await extract(asset, [
+          { id: raw.id, originalFileName: rawName, fileCreatedAt: new Date('2026-10-03T21:31:59.989Z'), stackId: null },
+        ]);
+
+        expect(mocks.stack.create).toHaveBeenCalledWith({ ownerId: asset.ownerId }, [asset.id, raw.id]);
+        expect(mocks.event.emit).toHaveBeenCalledWith('StackCreate', { stackId: 'stack-id', userId: asset.ownerId });
+      });
+
+      it('should keep the JPEG on top when the RAW is extracted second', async () => {
+        const asset = AssetFactory.create({ originalFileName: rawName });
+        const jpeg = AssetFactory.create({ originalFileName: jpegName });
+
+        await extract(asset, [{ id: jpeg.id, originalFileName: jpegName, fileCreatedAt: takenAt, stackId: null }]);
+
+        expect(mocks.stack.create).toHaveBeenCalledWith({ ownerId: asset.ownerId }, [jpeg.id, asset.id]);
+      });
+
+      it('should stack plain same-name pairs from other cameras', async () => {
+        const asset = AssetFactory.create({ originalFileName: 'IMG_1234.JPG' });
+        const raw = AssetFactory.create({ originalFileName: 'IMG_1234.CR3' });
+
+        await extract(asset, [{ id: raw.id, originalFileName: 'IMG_1234.CR3', fileCreatedAt: takenAt, stackId: null }]);
+
+        expect(mocks.stack.create).toHaveBeenCalledWith({ ownerId: asset.ownerId }, [asset.id, raw.id]);
+      });
+
+      it('should not stack two processed images with the same name', async () => {
+        const asset = AssetFactory.create({ originalFileName: 'IMG_1234.JPG' });
+        const heic = AssetFactory.create({ originalFileName: 'IMG_1234.HEIC' });
+
+        await extract(asset, [
+          { id: heic.id, originalFileName: 'IMG_1234.HEIC', fileCreatedAt: takenAt, stackId: null },
+        ]);
+
+        expect(mocks.stack.create).not.toHaveBeenCalled();
+      });
+
+      it('should do nothing when the pair is already stacked', async () => {
+        const asset = AssetFactory.create({ originalFileName: jpegName, stackId: 'stack-id' });
+        const raw = AssetFactory.create({ originalFileName: rawName });
+
+        await extract(asset, [{ id: raw.id, originalFileName: rawName, fileCreatedAt: takenAt, stackId: 'stack-id' }]);
+
+        expect(mocks.stack.create).not.toHaveBeenCalled();
+      });
+
+      it('should leave an existing stack alone', async () => {
+        const asset = AssetFactory.create({ originalFileName: jpegName });
+        const raw = AssetFactory.create({ originalFileName: rawName });
+
+        await extract(asset, [
+          { id: raw.id, originalFileName: rawName, fileCreatedAt: takenAt, stackId: 'other-stack-id' },
+        ]);
+
+        expect(mocks.stack.create).not.toHaveBeenCalled();
+      });
+
+      it('should not look for a RAW pair for videos', async () => {
+        const asset = AssetFactory.create({ type: AssetType.Video });
+        mocks.media.probe.mockResolvedValue(videoInfoStub.videoStreamVertical2160p);
+        mocks.assetJob.getForMetadataExtraction.mockResolvedValue(getForMetadataExtraction(asset));
+
+        await sut.handleMetadataExtraction({ id: asset.id });
+
+        expect(mocks.asset.findRawPairCandidates).not.toHaveBeenCalled();
+      });
+    });
+
     it.each([
       {
         exif: {

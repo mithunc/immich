@@ -79,6 +79,13 @@ interface LivePhotoSearchOptions {
   type: AssetType;
 }
 
+interface RawPairSearchOptions {
+  ownerId: string;
+  libraryId: string | null;
+  from: Date;
+  to: Date;
+}
+
 interface AssetBuilderOptions {
   isFavorite?: boolean;
   isTrashed?: boolean;
@@ -705,6 +712,23 @@ export class AssetRepository {
       .where('asset_exif.livePhotoCID', '=', livePhotoCID)
       .limit(1)
       .executeTakeFirst();
+  }
+
+  @GenerateSql({
+    params: [{ ownerId: DummyValue.UUID, libraryId: null, from: DummyValue.DATE, to: DummyValue.DATE }],
+  })
+  findRawPairCandidates({ ownerId, libraryId, from, to }: RawPairSearchOptions) {
+    return this.db
+      .selectFrom('asset')
+      .select(['asset.id', 'asset.originalFileName', 'asset.fileCreatedAt', 'asset.stackId'])
+      .where('ownerId', '=', asUuid(ownerId))
+      .$if(libraryId === null, (qb) => qb.where('libraryId', 'is', null))
+      .$if(libraryId !== null, (qb) => qb.where('libraryId', '=', asUuid(libraryId!)))
+      .where('type', '=', AssetType.Image)
+      .where('deletedAt', 'is', null)
+      .where('fileCreatedAt', '>=', from)
+      .where('fileCreatedAt', '<=', to)
+      .execute();
   }
 
   getStatistics(ownerId: string, { visibility, isFavorite, isTrashed }: AssetStatsOptions): Promise<AssetStats> {
