@@ -10,11 +10,13 @@ import 'package:immich_mobile/providers/infrastructure/settings.provider.dart';
 /// and seeds the next motion photo opened, in
 /// AssetViewerStateNotifier._syncMotionPhotoPlayback.
 final isPlayingMotionVideoProvider = StateNotifierProvider<IsPlayingMotionVideo, bool>((ref) {
-  return IsPlayingMotionVideo();
+  return IsPlayingMotionVideo(ref);
 });
 
 class IsPlayingMotionVideo extends StateNotifier<bool> {
-  IsPlayingMotionVideo() : super(false);
+  IsPlayingMotionVideo(this.ref) : super(false);
+
+  final Ref ref;
 
   bool get playing => state;
 
