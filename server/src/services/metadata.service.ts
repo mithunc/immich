@@ -34,11 +34,15 @@ import { isAssetChecksumConstraint } from 'src/utils/database.js';
 import { mergeTimeZone } from 'src/utils/date.js';
 import { mimeTypes } from 'src/utils/mime-types.js';
 import { batched, isFaceImportEnabled } from 'src/utils/misc.js';
+import { isRawPair } from 'src/utils/raw-pair.js';
 import { upsertTags } from 'src/utils/tag.js';
 import { Tasks } from 'src/utils/tasks.js';
 
 const POSTGRES_INT_MAX = 2_147_483_647;
 const POSTGRES_INT_MIN = -2_147_483_648;
+
+// a RAW and its processed image are written within a second of each other
+const RAW_PAIR_MAX_TIME_DIFF_MS = 60_000;
 
 /** look for a date from these tags (in order) */
 const EXIF_DATE_TAGS: Array<keyof ImmichTags> = [
@@ -201,6 +205,39 @@ export class MetadataService extends BaseService {
     ]);
 
     await this.eventRepository.emit('AssetHide', { assetId: motionAsset.id, userId: motionAsset.ownerId });
+  }
+
+  /** Stack a JPEG/HEIC with the RAW it was captured alongside, keeping the processed image on top */
+  private async linkRawPair(
+    asset: { id: string; ownerId: string; libraryId: string | null; originalFileName: string },
+    dateTimeOriginal: Date,
+  ): Promise<void> {
+    const time = dateTimeOriginal.getTime();
+    const candidates = await this.assetRepository.findRawPairCandidates({
+      ownerId: asset.ownerId,
+      libraryId: asset.libraryId,
+      from: new Date(time - RAW_PAIR_MAX_TIME_DIFF_MS),
+      to: new Date(time + RAW_PAIR_MAX_TIME_DIFF_MS),
+    });
+
+    const self = candidates.find(({ id }) => id === asset.id);
+    const [match] = candidates
+      .filter(({ id, originalFileName }) => id !== asset.id && isRawPair(asset.originalFileName, originalFileName))
+      .sort((a, b) => Math.abs(a.fileCreatedAt.getTime() - time) - Math.abs(b.fileCreatedAt.getTime() - time));
+
+    if (!self || !match) {
+      return;
+    }
+
+    // already paired, or in a stack the user (or another feature) made, which should be left alone
+    if (self.stackId !== null || match.stackId !== null) {
+      return;
+    }
+
+    // the first id becomes the primary asset
+    const assetIds = mimeTypes.isRaw(asset.originalFileName) ? [match.id, asset.id] : [asset.id, match.id];
+    const stack = await this.stackRepository.create({ ownerId: asset.ownerId }, assetIds);
+    await this.eventRepository.emit('StackCreate', { stackId: stack.id, userId: asset.ownerId });
   }
 
   private isOrientationSidewards(orientation: ExifOrientation | number): boolean {
@@ -406,6 +443,10 @@ export class MetadataService extends BaseService {
 
     if (exifData.livePhotoCID) {
       await this.linkLivePhotos(asset, exifData);
+    }
+
+    if (asset.type === AssetType.Image) {
+      await this.linkRawPair(asset, dates.dateTimeOriginal);
     }
 
     await this.assetRepository.upsertJobStatus({ assetId: asset.id, metadataExtractedAt: new Date() });
