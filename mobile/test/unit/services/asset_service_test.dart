@@ -179,4 +179,53 @@ void main() {
       verify(() => mocks.localAsset.repo.updatePreviousChecksum('local', 'srv')).called(1);
     });
   });
+  group('AssetService stack member actions', () {
+    test('setStackPrimary updates the server, then the local stack', () async {
+      when(() => apiRepository.setStackPrimary('stack', 'b')).thenAnswer((_) async {});
+      when(() => remoteRepository.setStackPrimary('stack', 'b')).thenAnswer((_) async {});
+
+      await sut.setStackPrimary('stack', 'b');
+
+      verifyInOrder([
+        () => apiRepository.setStackPrimary('stack', 'b'),
+        () => remoteRepository.setStackPrimary('stack', 'b'),
+      ]);
+    });
+
+    test('setStackPrimary leaves the local stack alone when the server rejects it', () async {
+      when(() => apiRepository.setStackPrimary('stack', 'b')).thenThrow(Exception('offline'));
+
+      await expectLater(sut.setStackPrimary('stack', 'b'), throwsException);
+
+      verifyNever(() => remoteRepository.setStackPrimary(any(), any()));
+    });
+
+    test('keepOnlyInStack trashes every other member, then dissolves the stack', () async {
+      when(() => remoteRepository.getStackAssetIds('stack')).thenAnswer((_) async => ['a', 'b', 'c']);
+      when(() => apiRepository.delete(any(), any())).thenAnswer((_) async {});
+      when(() => remoteRepository.trash(any())).thenAnswer((_) async {});
+      when(() => remoteRepository.unStack(any())).thenAnswer((_) async {});
+      when(() => apiRepository.unStack(any())).thenAnswer((_) async {});
+
+      final count = await sut.keepOnlyInStack('stack', 'b');
+
+      expect(count, 2);
+      verifyInOrder([
+        () => apiRepository.delete(['a', 'c'], false),
+        () => remoteRepository.trash(['a', 'c']),
+        () => remoteRepository.unStack(['stack']),
+        () => apiRepository.unStack(['stack']),
+      ]);
+    });
+
+    test('keepOnlyInStack does nothing when the asset is the only member', () async {
+      when(() => remoteRepository.getStackAssetIds('stack')).thenAnswer((_) async => ['b']);
+
+      final count = await sut.keepOnlyInStack('stack', 'b');
+
+      expect(count, 0);
+      verifyNever(() => apiRepository.delete(any(), any()));
+      verifyNever(() => apiRepository.unStack(any()));
+    });
+  });
 }

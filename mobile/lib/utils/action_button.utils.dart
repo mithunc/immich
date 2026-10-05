@@ -72,6 +72,8 @@ enum ActionButtonType {
   upload,
   openInBrowser,
   unstack,
+  setStackPrimary,
+  keepThisDeleteOthers,
   archive,
   unarchive,
   moveToLockFolder,
@@ -136,6 +138,11 @@ enum ActionButtonType {
             context.timelineOrigin != TimelineOrigin.trash &&
             !context.isInLockedView && //
             context.isStacked,
+      ActionButtonType.setStackPrimary || ActionButtonType.keepThisDeleteOthers =>
+        context.isOwner && //
+            context.timelineOrigin != TimelineOrigin.trash &&
+            !context.isInLockedView && //
+            context.isStacked,
       ActionButtonType.openInBrowser => context.asset.hasRemote && !context.isInLockedView,
       ActionButtonType.likeActivity =>
         !context.isInLockedView &&
@@ -193,6 +200,10 @@ enum ActionButtonType {
       ),
       ActionButtonType.likeActivity => LikeActivityActionButton(iconOnly: iconOnly, menuItem: menuItem),
       ActionButtonType.unstack => ActionMenuItem(action: StackAction(source: context.source)),
+      ActionButtonType.setStackPrimary => ActionMenuItem(action: SetStackPrimaryAction(source: context.source)),
+      ActionButtonType.keepThisDeleteOthers => ActionMenuItem(
+        action: KeepThisDeleteOthersAction(source: context.source),
+      ),
       ActionButtonType.openInBrowser => ActionMenuItem(
         action: OpenInBrowserAction(remoteId: context.asset.remoteId!, origin: context.timelineOrigin),
       ),
@@ -232,6 +243,8 @@ enum ActionButtonType {
     ActionButtonType.removeFromLockFolder => 10,
     ActionButtonType.removeFromAlbum => 10,
     ActionButtonType.unstack => 10,
+    ActionButtonType.setStackPrimary => 10,
+    ActionButtonType.keepThisDeleteOthers => 10,
     ActionButtonType.archive => 10,
     ActionButtonType.unarchive => 10,
     ActionButtonType.moveToLockFolder => 10,

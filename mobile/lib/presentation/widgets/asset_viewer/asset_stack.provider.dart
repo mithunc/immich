@@ -16,3 +16,7 @@ class StackChildrenNotifier extends AutoDisposeFamilyStreamNotifier<List<RemoteA
 
 final stackChildrenNotifier = StreamNotifierProvider.autoDispose
     .family<StackChildrenNotifier, List<RemoteAsset>, BaseAsset>(StackChildrenNotifier.new);
+
+final stackPrimaryIdProvider = StreamProvider.autoDispose.family<String?, String>(
+  (ref, stackId) => ref.watch(assetServiceProvider).watchStackPrimaryId(stackId),
+);
