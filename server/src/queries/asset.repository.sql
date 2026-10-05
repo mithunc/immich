@@ -345,16 +345,19 @@ select
   "asset"."id",
   "asset"."originalFileName",
   "asset"."fileCreatedAt",
-  "asset"."stackId"
+  "asset"."createdAt",
+  "asset"."stackId",
+  "stack"."primaryAssetId" as "stackPrimaryAssetId"
 from
   "asset"
+  left join "stack" on "stack"."id" = "asset"."stackId"
 where
-  "ownerId" = $1::uuid
-  and "libraryId" is null
-  and "type" = $2
-  and "deletedAt" is null
-  and "fileCreatedAt" >= $3
-  and "fileCreatedAt" <= $4
+  "asset"."ownerId" = $1::uuid
+  and "asset"."libraryId" is null
+  and "asset"."type" = $2
+  and "asset"."deletedAt" is null
+  and "asset"."fileCreatedAt" >= $3
+  and "asset"."fileCreatedAt" <= $4
 
 -- AssetRepository.getCalendarHeatmap
 select
