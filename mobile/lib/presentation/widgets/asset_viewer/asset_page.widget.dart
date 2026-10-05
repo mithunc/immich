@@ -424,8 +424,9 @@ class _AssetPageState extends ConsumerState<AssetPage> {
     );
   }
 
-  /// Moves the selection off a stack member that just left the stack (trashed or deleted), so the
-  /// viewer never keeps acting on an asset the strip no longer shows.
+  /// Keeps the strip's selection on the open asset as the stack changes: follows it when the
+  /// members reorder (a new primary), and moves off it when it leaves the stack (trashed or
+  /// deleted), so the viewer never keeps acting on an asset the strip no longer shows.
   void _onStackChanged(List<RemoteAsset>? stack) {
     if (stack == null || stack.isEmpty) {
       return;
@@ -433,12 +434,22 @@ class _AssetPageState extends ConsumerState<AssetPage> {
 
     final viewer = ref.read(assetViewerProvider);
     final current = viewer.currentAsset;
-    if (current is! RemoteAsset || current.stackId != stack.first.stackId || stack.any((a) => a.id == current.id)) {
+    if (current is! RemoteAsset) {
+      return;
+    }
+
+    final notifier = ref.read(assetViewerProvider.notifier);
+    final currentIndex = stack.indexWhere((a) => a.id == current.id);
+    if (currentIndex != -1) {
+      notifier.setStackIndex(currentIndex);
+      return;
+    }
+
+    if (current.stackId != stack.first.stackId) {
       return;
     }
 
     final index = viewer.stackIndex.clamp(0, stack.length - 1);
-    final notifier = ref.read(assetViewerProvider.notifier);
     notifier.setAsset(stack[index]);
     notifier.setStackIndex(index);
   }

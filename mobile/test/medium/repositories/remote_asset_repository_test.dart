@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:immich_mobile/data/db/main/table/remote/asset.drift.dart';
+import 'package:immich_mobile/data/db/main/table/remote/stack.drift.dart';
 import 'package:immich_mobile/infrastructure/repositories/remote_asset.repository.dart';
 
 import '../repository_context.dart';
@@ -126,6 +127,31 @@ void main() {
       final children = await sut.watchStackChildren((await sut.get(primary.id))!).first;
 
       expect(children.map((a) => a.id), [kept.id]);
+    });
+  });
+  group('stack members', () {
+    test('getStackAssetIds returns the members not in the trash', () async {
+      final user = await ctx.newUser();
+      final primary = await ctx.newRemoteAsset(ownerId: user.id, stackId: 'stack');
+      final child = await ctx.newRemoteAsset(ownerId: user.id, stackId: 'stack');
+      await ctx.newRemoteAsset(ownerId: user.id, stackId: 'stack', deletedAt: DateTime.utc(2026, 1, 1));
+      await ctx.newRemoteAsset(ownerId: user.id, stackId: 'other');
+
+      expect(await sut.getStackAssetIds('stack'), unorderedEquals([primary.id, child.id]));
+    });
+
+    test('setStackPrimary moves the primary and the watcher sees it', () async {
+      final user = await ctx.newUser();
+      final first = await ctx.newRemoteAsset(ownerId: user.id, stackId: 'stack');
+      final second = await ctx.newRemoteAsset(ownerId: user.id, stackId: 'stack');
+      await ctx.db
+          .into(ctx.db.stackEntity)
+          .insert(StackEntityCompanion.insert(id: 'stack', ownerId: user.id, primaryAssetId: first.id));
+
+      final expectation = expectLater(sut.watchStackPrimaryId('stack'), emitsInOrder([first.id, second.id]));
+      await pumpEventQueue();
+      await sut.setStackPrimary('stack', second.id);
+      await expectation;
     });
   });
 }

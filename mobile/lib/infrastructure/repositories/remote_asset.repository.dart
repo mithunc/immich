@@ -173,6 +173,28 @@ class RemoteAssetRepository extends DatabaseAccessor<Drift> with $RemoteAssetRep
     });
   }
 
+  Future<List<String>> getStackAssetIds(String stackId) {
+    final query = _db.remoteAssetEntity.selectOnly()
+      ..addColumns([_db.remoteAssetEntity.id])
+      ..where(_db.remoteAssetEntity.stackId.equals(stackId) & _db.remoteAssetEntity.deletedAt.isNull());
+
+    return query.map((row) => row.read(_db.remoteAssetEntity.id)!).get();
+  }
+
+  Stream<String?> watchStackPrimaryId(String stackId) {
+    final query = _db.stackEntity.selectOnly()
+      ..addColumns([_db.stackEntity.primaryAssetId])
+      ..where(_db.stackEntity.id.equals(stackId));
+
+    return query.map((row) => row.read(_db.stackEntity.primaryAssetId)).watchSingleOrNull();
+  }
+
+  Future<void> setStackPrimary(String stackId, String primaryAssetId) {
+    return (_db.stackEntity.update()..where((row) => row.id.equals(stackId))).write(
+      StackEntityCompanion(primaryAssetId: Value(primaryAssetId)),
+    );
+  }
+
   Future<void> unStack(List<String> stackIds) {
     return _db.transaction(() async {
       await _db.batch((batch) {
