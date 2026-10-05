@@ -25,6 +25,7 @@
   import { handleError } from '#lib/utils/handle-error.ts';
   import { InvocationTracker } from '#lib/utils/invocationTracker.ts';
   import { navigate } from '#lib/utils/navigation.ts';
+  import { isRawFileName } from '#lib/utils/raw-file.ts';
   import { SlideshowHistory } from '#lib/utils/slideshow-history.ts';
   import { toTimelineAsset } from '#lib/utils/timeline-util.ts';
   import {
@@ -652,20 +653,31 @@
             class={['relative inline-block px-1 pb-2 transition-all']}
             style:bottom={stackedAsset.id === asset.id ? '0' : '-10px'}
           >
-            <Thumbnail
-              imageClass={stackedAsset.id === asset.id ? 'border-2 border-white' : 'brightness-70'}
-              brokenAssetClass="text-xs"
-              asset={toTimelineAsset(stackedAsset)}
-              onClick={() => {
-                cursor.current = stackedAsset;
-                previewStackedAsset = undefined;
-              }}
-              onMouseEvent={({ isMouseOver }) => handleStackedAssetMouseEvent(isMouseOver, stackedAsset)}
-              readonly
-              thumbnailSize={stackedAsset.id === asset.id ? stackSelectedThumbnailSize : stackThumbnailSize}
-              showStackedIcon={false}
-              disableLinkMouseOver
-            />
+            <div class="relative">
+              <Thumbnail
+                imageClass={stackedAsset.id === asset.id ? 'border-2 border-white' : 'brightness-70'}
+                brokenAssetClass="text-xs"
+                asset={toTimelineAsset(stackedAsset)}
+                onClick={() => {
+                  cursor.current = stackedAsset;
+                  previewStackedAsset = undefined;
+                }}
+                onMouseEvent={({ isMouseOver }) => handleStackedAssetMouseEvent(isMouseOver, stackedAsset)}
+                readonly
+                thumbnailSize={stackedAsset.id === asset.id ? stackSelectedThumbnailSize : stackThumbnailSize}
+                showStackedIcon={false}
+                disableLinkMouseOver
+              />
+
+              <!-- a RAW and the JPEG developed from it have identical thumbnails -->
+              {#if isRawFileName(stackedAsset.originalFileName)}
+                <p
+                  class="text-white-shadow pointer-events-none absolute inset-x-0 bottom-0.5 z-3 text-center text-[10px] font-bold text-white"
+                >
+                  RAW
+                </p>
+              {/if}
+            </div>
 
             {#if stackedAsset.id === asset.id}
               <div class="flex w-full place-content-center place-items-center">
