@@ -105,6 +105,25 @@ class AssetService {
     await _remoteRepository.stack(userId, stack);
   }
 
+  Stream<String?> watchStackPrimaryId(String stackId) => _remoteRepository.watchStackPrimaryId(stackId);
+
+  Future<void> setStackPrimary(String stackId, String primaryAssetId) async {
+    await _apiRepository.setStackPrimary(stackId, primaryAssetId);
+    await _remoteRepository.setStackPrimary(stackId, primaryAssetId);
+  }
+
+  /// Trashes every other member of the stack, then dissolves the stack so [keepAssetId] stands alone.
+  Future<int> keepOnlyInStack(String stackId, String keepAssetId) async {
+    final trashIds = (await _remoteRepository.getStackAssetIds(stackId)).where((id) => id != keepAssetId).toList();
+    if (trashIds.isEmpty) {
+      return 0;
+    }
+
+    await trash(trashIds);
+    await unstack([stackId]);
+    return trashIds.length;
+  }
+
   Future<void> unstack(List<String> stackIds) async {
     if (stackIds.isEmpty) {
       return;
