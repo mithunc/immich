@@ -278,6 +278,50 @@ describe(MetadataService.name, () => {
         ]),
       );
     });
+
+    it('should gather edits exported from the RAW into its stack, with the camera image on top', async () => {
+      const { sut, ctx } = setup();
+      ctx.getMock(EventRepository).emit.mockResolvedValue();
+      const { filePath } = await createTestFile({ DateTimeOriginal: '2026:10:03 14:32:00.200-07:00' });
+      const { user } = await ctx.newUser();
+      const { asset: raw } = await ctx.newAsset({
+        ownerId: user.id,
+        originalFileName: 'PXL_20261003_213200200.RAW-02.ORIGINAL.dng',
+        fileCreatedAt: new Date('2026-10-03T21:32:00.200Z'),
+      });
+      const { asset: edit } = await ctx.newAsset({
+        ownerId: user.id,
+        originalFileName: 'PXL_20261003_213200200.RAW-02.ORIGINAL (1).jpg',
+        fileCreatedAt: new Date('2026-10-03T21:32:00.200Z'),
+      });
+      // stacked before the camera's image was extracted, with the edit as the cover
+      await ctx.get(StackRepository).create({ ownerId: user.id }, [edit.id, raw.id]);
+      const { asset: jpeg } = await ctx.newAsset({
+        ownerId: user.id,
+        originalPath: filePath,
+        originalFileName: 'PXL_20261003_213200200.RAW-01.MP.COVER.jpg',
+      });
+      await ctx.newExif({ assetId: jpeg.id, description: '' });
+      const { asset: laterEdit } = await ctx.newAsset({
+        ownerId: user.id,
+        originalPath: filePath,
+        originalFileName: 'PXL_20261003_213200200.RAW-02.ORIGINAL.jpg',
+      });
+      await ctx.newExif({ assetId: laterEdit.id, description: '' });
+
+      await sut.handleMetadataExtraction({ id: jpeg.id });
+      await sut.handleMetadataExtraction({ id: laterEdit.id });
+
+      const stacks = await ctx.database.selectFrom('stack').selectAll().where('ownerId', '=', user.id).execute();
+      expect(stacks).toEqual([expect.objectContaining({ primaryAssetId: jpeg.id })]);
+      const assets = await ctx.database
+        .selectFrom('asset')
+        .select(['id', 'stackId'])
+        .where('id', 'in', [jpeg.id, raw.id, edit.id, laterEdit.id])
+        .execute();
+      expect(assets).toHaveLength(4);
+      expect(assets.every(({ stackId }) => stackId === stacks[0].id)).toBe(true);
+    });
   });
 
   it('should handle float lens models (#30492)', async () => {
