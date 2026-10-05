@@ -53,14 +53,13 @@ class AssetService {
     return _remoteRepository.get(id);
   }
 
-  Future<List<RemoteAsset>> getStack(RemoteAsset asset) async {
+  Stream<List<RemoteAsset>> watchStack(RemoteAsset asset) {
     if (asset.stackId == null) {
-      return const [];
+      return Stream.value(const []);
     }
 
-    final stack = await _remoteRepository.getStackChildren(asset);
     // Include the primary asset in the stack as the first item
-    return [asset, ...stack];
+    return _remoteRepository.watchStackChildren(asset).map((children) => [asset, ...children]);
   }
 
   Stream<ExifInfo?> watchExif(BaseAsset asset) {

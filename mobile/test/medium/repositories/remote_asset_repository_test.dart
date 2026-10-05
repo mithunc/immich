@@ -95,4 +95,37 @@ void main() {
       expect(await groupDate(asset.id), '2024-01-01');
     });
   });
+  group('watchStackChildren', () {
+    test('drops a member from the stream once it is trashed', () async {
+      final user = await ctx.newUser();
+      final primary = await ctx.newRemoteAsset(ownerId: user.id, stackId: 'stack');
+      final older = await ctx.newRemoteAsset(ownerId: user.id, stackId: 'stack', createdAt: DateTime.utc(2026, 1, 1));
+      final newer = await ctx.newRemoteAsset(ownerId: user.id, stackId: 'stack', createdAt: DateTime.utc(2026, 1, 2));
+      await ctx.newRemoteAsset(ownerId: user.id);
+
+      final stream = sut.watchStackChildren((await sut.get(primary.id))!).map((s) => s.map((a) => a.id).toList());
+
+      final expectation = expectLater(
+        stream,
+        emitsInOrder([
+          [newer.id, older.id],
+          [older.id],
+        ]),
+      );
+      await pumpEventQueue();
+      await sut.trash([newer.id]);
+      await expectation;
+    });
+
+    test('leaves out members already in the trash', () async {
+      final user = await ctx.newUser();
+      final primary = await ctx.newRemoteAsset(ownerId: user.id, stackId: 'stack');
+      final kept = await ctx.newRemoteAsset(ownerId: user.id, stackId: 'stack');
+      await ctx.newRemoteAsset(ownerId: user.id, stackId: 'stack', deletedAt: DateTime.utc(2026, 1, 1));
+
+      final children = await sut.watchStackChildren((await sut.get(primary.id))!).first;
+
+      expect(children.map((a) => a.id), [kept.id]);
+    });
+  });
 }

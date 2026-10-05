@@ -51,17 +51,18 @@ class RemoteAssetRepository extends DatabaseAccessor<Drift> with $RemoteAssetRep
     return query.map((row) => row.toDto()).get();
   }
 
-  Future<List<RemoteAsset>> getStackChildren(RemoteAsset asset) {
+  /// Emits the stack's other members on every change, leaving out trashed ones.
+  Stream<List<RemoteAsset>> watchStackChildren(RemoteAsset asset) {
     final stackId = asset.stackId;
     if (stackId == null) {
-      return Future.value(const []);
+      return Stream.value(const []);
     }
 
     final query = _db.remoteAssetEntity.select()
-      ..where((row) => row.stackId.equals(stackId) & row.id.equals(asset.id).not())
+      ..where((row) => row.stackId.equals(stackId) & row.id.equals(asset.id).not() & row.deletedAt.isNull())
       ..orderBy([(row) => OrderingTerm.desc(row.createdAt)]);
 
-    return query.map((row) => row.toDto()).get();
+    return query.map((row) => row.toDto()).watch();
   }
 
   Stream<ExifInfo?> watchExif(String id) => _db.managers.remoteExifEntity

@@ -424,6 +424,25 @@ class _AssetPageState extends ConsumerState<AssetPage> {
     );
   }
 
+  /// Moves the selection off a stack member that just left the stack (trashed or deleted), so the
+  /// viewer never keeps acting on an asset the strip no longer shows.
+  void _onStackChanged(List<RemoteAsset>? stack) {
+    if (stack == null || stack.isEmpty) {
+      return;
+    }
+
+    final viewer = ref.read(assetViewerProvider);
+    final current = viewer.currentAsset;
+    if (current is! RemoteAsset || current.stackId != stack.first.stackId || stack.any((a) => a.id == current.id)) {
+      return;
+    }
+
+    final index = viewer.stackIndex.clamp(0, stack.length - 1);
+    final notifier = ref.read(assetViewerProvider.notifier);
+    notifier.setAsset(stack[index]);
+    notifier.setStackIndex(index);
+  }
+
   @override
   Widget build(BuildContext context) {
     final (currentAsset, thumbnailSize) = ref.watch(
@@ -447,6 +466,9 @@ class _AssetPageState extends ConsumerState<AssetPage> {
     BaseAsset displayAsset = asset;
     final showAssetStack = ref.watch(timelineServiceProvider.select((s) => s.origin != TimelineOrigin.trash));
     final stackChildren = showAssetStack ? ref.watch(stackChildrenNotifier(asset)).valueOrNull : null;
+    if (showAssetStack) {
+      ref.listen(stackChildrenNotifier(asset), (_, next) => _onStackChanged(next.valueOrNull));
+    }
     if (stackChildren != null && stackChildren.isNotEmpty) {
       final safeStackIndex = stackIndex.clamp(0, stackChildren.length - 1);
       displayAsset = stackChildren.elementAt(safeStackIndex);
@@ -526,7 +548,8 @@ class _AssetPageState extends ConsumerState<AssetPage> {
             ),
           ),
         ),
-        if (stackChildren != null && stackChildren.isNotEmpty)
+        // Trashing members can leave just the primary, which needs no picker.
+        if (stackChildren != null && stackChildren.length > 1)
           Positioned(
             left: 0,
             right: 0,
