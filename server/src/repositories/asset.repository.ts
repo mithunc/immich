@@ -720,14 +720,22 @@ export class AssetRepository {
   findRawPairCandidates({ ownerId, libraryId, from, to }: RawPairSearchOptions) {
     return this.db
       .selectFrom('asset')
-      .select(['asset.id', 'asset.originalFileName', 'asset.fileCreatedAt', 'asset.stackId'])
-      .where('ownerId', '=', asUuid(ownerId))
-      .$if(libraryId === null, (qb) => qb.where('libraryId', 'is', null))
-      .$if(libraryId !== null, (qb) => qb.where('libraryId', '=', asUuid(libraryId!)))
-      .where('type', '=', AssetType.Image)
-      .where('deletedAt', 'is', null)
-      .where('fileCreatedAt', '>=', from)
-      .where('fileCreatedAt', '<=', to)
+      .leftJoin('stack', 'stack.id', 'asset.stackId')
+      .select([
+        'asset.id',
+        'asset.originalFileName',
+        'asset.fileCreatedAt',
+        'asset.createdAt',
+        'asset.stackId',
+        'stack.primaryAssetId as stackPrimaryAssetId',
+      ])
+      .where('asset.ownerId', '=', asUuid(ownerId))
+      .$if(libraryId === null, (qb) => qb.where('asset.libraryId', 'is', null))
+      .$if(libraryId !== null, (qb) => qb.where('asset.libraryId', '=', asUuid(libraryId!)))
+      .where('asset.type', '=', AssetType.Image)
+      .where('asset.deletedAt', 'is', null)
+      .where('asset.fileCreatedAt', '>=', from)
+      .where('asset.fileCreatedAt', '<=', to)
       .execute();
   }
 

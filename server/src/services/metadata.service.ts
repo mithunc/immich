@@ -34,14 +34,14 @@ import { isAssetChecksumConstraint } from 'src/utils/database.js';
 import { mergeTimeZone } from 'src/utils/date.js';
 import { mimeTypes } from 'src/utils/mime-types.js';
 import { batched, isFaceImportEnabled } from 'src/utils/misc.js';
-import { isRawPair } from 'src/utils/raw-pair.js';
+import { compareRawStackCover, getRawPairKey } from 'src/utils/raw-pair.js';
 import { upsertTags } from 'src/utils/tag.js';
 import { Tasks } from 'src/utils/tasks.js';
 
 const POSTGRES_INT_MAX = 2_147_483_647;
 const POSTGRES_INT_MIN = -2_147_483_648;
 
-// a RAW and its processed image are written within a second of each other
+// a RAW and its processed image are written within a second of each other, and edits copy the RAW's capture time
 const RAW_PAIR_MAX_TIME_DIFF_MS = 60_000;
 
 /** look for a date from these tags (in order) */
@@ -207,11 +207,19 @@ export class MetadataService extends BaseService {
     await this.eventRepository.emit('AssetHide', { assetId: motionAsset.id, userId: motionAsset.ownerId });
   }
 
-  /** Stack a JPEG/HEIC with the RAW it was captured alongside, keeping the processed image on top */
-  private async linkRawPair(
+  /**
+   * Stack a JPEG/HEIC, the RAW captured alongside it and any edits exported from them under one cover.
+   * Edits copy the RAW's capture time, so they fall in the same window however much later they are made.
+   */
+  private async linkRawGroup(
     asset: { id: string; ownerId: string; libraryId: string | null; originalFileName: string },
     dateTimeOriginal: Date,
   ): Promise<void> {
+    const key = getRawPairKey(asset.originalFileName);
+    if (!key) {
+      return;
+    }
+
     const time = dateTimeOriginal.getTime();
     const candidates = await this.assetRepository.findRawPairCandidates({
       ownerId: asset.ownerId,
@@ -220,22 +228,27 @@ export class MetadataService extends BaseService {
       to: new Date(time + RAW_PAIR_MAX_TIME_DIFF_MS),
     });
 
-    const self = candidates.find(({ id }) => id === asset.id);
-    const [match] = candidates
-      .filter(({ id, originalFileName }) => id !== asset.id && isRawPair(asset.originalFileName, originalFileName))
-      .sort((a, b) => Math.abs(a.fileCreatedAt.getTime() - time) - Math.abs(b.fileCreatedAt.getTime() - time));
+    const group = candidates.filter(({ originalFileName }) => getRawPairKey(originalFileName) === key);
+    const groupIds = new Set(group.map(({ id }) => id));
+    // a stack whose cover is some other file was made by the user (or another feature), so leave its members alone
+    const members = group.filter(
+      ({ stackPrimaryAssetId }) => stackPrimaryAssetId === null || groupIds.has(stackPrimaryAssetId),
+    );
 
-    if (!self || !match) {
+    const isMember = members.some(({ id }) => id === asset.id);
+    const rawCount = members.filter(({ originalFileName }) => mimeTypes.isRaw(originalFileName)).length;
+    if (!isMember || rawCount === 0 || rawCount === members.length) {
       return;
     }
 
-    // already paired, or in a stack the user (or another feature) made, which should be left alone
-    if (self.stackId !== null || match.stackId !== null) {
+    // nothing to add, so keep the current cover, which the user may have picked
+    const [{ stackId }] = members;
+    if (stackId !== null && members.every((member) => member.stackId === stackId)) {
       return;
     }
 
-    // the first id becomes the primary asset
-    const assetIds = mimeTypes.isRaw(asset.originalFileName) ? [match.id, asset.id] : [asset.id, match.id];
+    // the first id becomes the cover, and existing stacks with a cover among these ids are merged in
+    const assetIds = members.toSorted(compareRawStackCover).map(({ id }) => id);
     const stack = await this.stackRepository.create({ ownerId: asset.ownerId }, assetIds);
     await this.eventRepository.emit('StackCreate', { stackId: stack.id, userId: asset.ownerId });
   }
@@ -446,7 +459,7 @@ export class MetadataService extends BaseService {
     }
 
     if (asset.type === AssetType.Image) {
-      await this.linkRawPair(asset, dates.dateTimeOriginal);
+      await this.linkRawGroup(asset, dates.dateTimeOriginal);
     }
 
     await this.assetRepository.upsertJobStatus({ assetId: asset.id, metadataExtractedAt: new Date() });
